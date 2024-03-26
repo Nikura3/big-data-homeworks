@@ -4,7 +4,7 @@ import sys
 import os
 import math
 
-def eudistance(p1, p2):
+def euclidianDistance(p1, p2):
      return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 def ExactOutliers(inputPoints, D, M, K):
@@ -154,8 +154,18 @@ def main():
 	
 	if numPoints <= 200000:
 		listOfPoints = inputPoints.collect()
-		# TODO: execute ExactOutliers with parameters listOfPoints, D, M and K
-		# TODO: print running time of ExactOutliers
+        
+		startETime = time.time()
+		ExactOutliers(inputPoints, D, M, K)
+        
+		endETime = time.time()
+		runningETime = endETime - startETime
+		print("Running time for ExactOutliers:", runningETime, "seconds")
+     
+     
+     
+	
+
     
 	startMRTime = time.time()
     
@@ -166,7 +176,7 @@ def main():
 	print("Running time for MRApproxOutliers:", runningTime, "seconds")
 	# TODO: print running time of MRApproxOutliers
 
-	ExactOutliers(inputPoints, D, M, K)
+
 
 if __name__ == "__main__":
 	main()
