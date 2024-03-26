@@ -2,6 +2,49 @@ from pyspark import SparkContext, SparkConf
 import time
 import sys
 import os
+import math
+
+def eudistance(p1, p2):
+     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+
+def ExactOutliers(inputPoints, D, M, K):
+     # inputPoints: list of points 
+     # D: threshold distance
+     # M: minimum number of pomts in the ball
+     # K: number of outliners to print
+    
+    outliers = []
+    outlier_counts = 0
+   
+    #Calculate distances for each point 
+    for p1 in inputPoints:
+        count = 0
+        for p2 in inputPoints:
+            if p1 != p2 and eudistance(p1, p2) <=D:
+                count+= 1
+        if count <= M: 
+               outlier_counts += 1
+               outliers.append((p1, count))
+         
+    #for point in inputPoints:
+         # Count points within distance D
+    #     count = sum(1 for q in inputPoints if eudistance(p, q) <= D)
+    #     if count <= M:
+    #          outlier_counts += 1
+    #          outliers.append((point, count))
+    
+	# Print number of outliers
+    print("Number of (D, M)-outliners:", outlier_counts)
+    
+	# Sort outliers by |BS(p, D)|
+    outliers.sort(key=lambda x: x[1])
+    
+	# Print first K outliers in non-decreasing order of |BS(p, D)|
+    print("The first", min(K, len(outliers)), "outliers points:")
+    for i in range(min(K, len(outliers))):
+         print("Outliner point:", outliers[i][0], "|BS(p, D)|:", outliers[i][1])
+		
+
 
 
 def MRApproxOutliers(inputPoints, D, M, K):
@@ -123,6 +166,7 @@ def main():
 	print("Running time for MRApproxOutliers:", runningTime, "seconds")
 	# TODO: print running time of MRApproxOutliers
 
+	ExactOutliers(inputPoints, D, M, K)
 
 if __name__ == "__main__":
 	main()
