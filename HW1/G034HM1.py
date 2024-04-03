@@ -23,7 +23,7 @@ def ExactOutliers(inputPoints, D, M, K):
         count = 1 # consider p1 in the count
         for p2 in inputPoints:
             if p1 != p2:                                                 
-                if squaredDistance(p1,p2) <=D: #se facciamo con square root allora <=D**2, fare prove per vedere il migliore
+                if squaredDistance(p1,p2) <=D**2: #se facciamo con square root allora <=D, fare prove per vedere il migliore
                     count += 1
         if count <= M: 
                 outlier_counts += 1
