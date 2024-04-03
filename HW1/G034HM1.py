@@ -8,22 +8,23 @@ import math
 def ExactOutliers(inputPoints, D, M, K):
     # inputPoints: list of points 
     # D: threshold distance
-    # M: minimum number of pomts in the ball
+    # M: minimum number of pomts in the circle
     # K: number of outliners to print
     
-    def euclideanDistance(p1, p2):
-        return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    def squaredDistance(p1, p2):                                    
+        return ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
     outliers = []
     outlier_counts = 0
     
 
-    #Calculate distances for each point 
+    #Calculate square distances for each point 
     for p1 in inputPoints:
         count = 1 # consider p1 in the count
         for p2 in inputPoints:
-            if p1 != p2 and euclideanDistance(p1, p2) <= D:
-                count += 1
+            if p1 != p2:                                                 
+                if squaredDistance(p1,p2) <=D: #se facciamo con square root allora <=D**2, fare prove per vedere il migliore
+                    count += 1
         if count <= M: 
                 outlier_counts += 1
                 outliers.append((p1, count))
