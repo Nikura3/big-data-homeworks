@@ -23,7 +23,7 @@ def ExactOutliers(inputPoints, D, M, K):
         count = 1 # consider p1 in the count
         for p2 in inputPoints:
             if p1 != p2:                                                 
-                if squaredDistance(p1,p2) <=D**2: #se facciamo con square root allora <=D, fare prove per vedere il migliore
+                if squaredDistance(p1,p2) <= D**2: #se facciamo con square root allora <=D, fare prove per vedere il migliore
                     count += 1
         if count <= M: 
                 outlier_counts += 1
@@ -67,9 +67,9 @@ def MRApproxOutliers(inputPoints, D, M, K):
 		
     # contain, for each cell, its identifier (𝑖,𝑗) and the number of points of 𝑆 that it contains
     # Step A: Transform RDD into an RDD of non-empty cells
-    cell_counts = (inputPoints.map(lambda point: ((int(point[0] // (D/(2*math.sqrt(2)))), int(point[1] // (D/(2*math.sqrt(2))))), 1)) # <- MAP: each point, mapped to its corresponding cell identifier -> output: (cell_identifier, 1)
-                        .reduceByKey(lambda x, y: x + y) # <- REDUCE: The pairs with the same cell identifier are grouped together and the values are summed up -> output: (cell_identifier, number of elements)
-                        .filter(lambda cell_count: cell_count[1] > 0)) # filter non-empty cells
+    cell_counts = (inputPoints.map(lambda point: ((int(point[0] // (D / (2*math.sqrt(2)))), int(point[1] // (D / (2*math.sqrt(2))))), 1)) # <- MAP: each point, mapped to its corresponding cell identifier -> output: (cell_identifier, 1)
+                        .reduceByKey(lambda x, y: x + y )) # <- REDUCE: The pairs with the same cell identifier are grouped together and the values are summed up -> output: (cell_identifier, number of elements)
+                        # .filter(lambda cell: cell[1] > 0)) # filter non-empty cells
     
     # Step B: attach to each element, relative to a non-empty cell 𝐶, the values |𝑁3(𝐶)| and |𝑁7(𝐶)|, as additional info
     cell_counts_dict = cell_counts.collectAsMap() # to make it a dictionary
@@ -82,9 +82,9 @@ def MRApproxOutliers(inputPoints, D, M, K):
     uncertain = 0
     for cell, size, n3, n7 in cells_info_list:
         if n7 <= M:
-            outliers += 1
+            outliers += size
         elif n3 <= M and n7 > M:
-            uncertain += 1
+            uncertain += size
     
     print("Number of sure outliers =", outliers)
     print("Number of uncertain points =", uncertain)
