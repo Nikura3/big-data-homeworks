@@ -3,6 +3,7 @@ import time
 import sys
 import os
 import math
+from itertools import combinations
 
 
 def ExactOutliers(inputPoints, D, M, K):
@@ -11,23 +12,24 @@ def ExactOutliers(inputPoints, D, M, K):
     # M: minimum number of pomts in the circle
     # K: number of outliners to print
     
-    def squaredDistance(p1, p2):                                    
-        return ((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
-
+    def squaredDistance(p1, p2):
+        t0 = p1[0] - p2[0]
+        t1 = p1[1] - p2[1]                                 
+        return (t0 * t0 + t1 * t1)
+    
     outliers = []
     outlier_counts = 0
-    
 
-    #Calculate square distances for each point 
+    D2 = D * D
+
     for p1 in inputPoints:
-        count = 1 # consider p1 in the count
-        for p2 in inputPoints:
-            if p1 != p2:                                                 
-                if squaredDistance(p1,p2) <= D**2: #se facciamo con square root allora <=D, fare prove per vedere il migliore
-                    count += 1
+        count = 0
+        for p2 in inputPoints:                                           
+            if squaredDistance(p1,p2) <= D2:
+                count += 1
         if count <= M: 
-                outlier_counts += 1
-                outliers.append((p1, count))
+            outlier_counts += 1
+            outliers.append((p1, count))
 
 	# Print number of outliers
     print("Number of Outliers =", outlier_counts)
@@ -69,14 +71,12 @@ def MRApproxOutliers(inputPoints, D, M, K):
     # Step A: Transform RDD into an RDD of non-empty cells
     cell_counts = (inputPoints.map(lambda point: ((int(point[0] // (D / (2*math.sqrt(2)))), int(point[1] // (D / (2*math.sqrt(2))))), 1)) # <- MAP: each point, mapped to its corresponding cell identifier -> output: (cell_identifier, 1)
                         .reduceByKey(lambda x, y: x + y )) # <- REDUCE: The pairs with the same cell identifier are grouped together and the values are summed up -> output: (cell_identifier, number of elements)
-                        # .filter(lambda cell: cell[1] > 0)) # filter non-empty cells
-    
+
     # Step B: attach to each element, relative to a non-empty cell 𝐶, the values |𝑁3(𝐶)| and |𝑁7(𝐶)|, as additional info
     cell_counts_dict = cell_counts.collectAsMap() # to make it a dictionary
     cells_info = cell_counts.map(lambda cell: (cell[0], cell[1], calculateR3(cell[0]), calculateR7(cell[0])))
 	
     # compute and print the number of sure outliers
-    #cells_info_dict = cells_info.collectAsMap() # to make it a dictionary
     cells_info_list = cells_info.collect()
     outliers = 0
     uncertain = 0
@@ -100,10 +100,6 @@ def MRApproxOutliers(inputPoints, D, M, K):
 	
 
 def main():
-    # To implement the algorithms assume that each point 𝑝 is represented through its coordinates (𝑥𝑝,𝑦𝑝), 
-    # where each coordinate is a float, and that set 𝑆 is given in input as a file, where each row contains 
-    # one point stored with the coordinates separated by comma (','). Assume also that all points are distinct.
-    # CHECKING NUMBER OF CMD LINE PARAMTERS
     assert len(sys.argv) == 6, "Usage: python G034HW1.py <D> <M> <K> <L> <file_name>"
 
     # SPARK SETUP
@@ -142,7 +138,6 @@ def main():
     numPoints = inputPoints.count()
     print("Number of points =", numPoints)
 
-    # .cache() -> keep it in memory, otherwise spark may decide to distruct it and keep only indications on how to reconstruct it
     inputPoints = inputPoints.repartition(L)
 
     if numPoints <= 200000:
@@ -160,7 +155,6 @@ def main():
     endMRTime = time.time()
     runningTime = endMRTime - startMRTime
     print("Running time of MRApproxOutliers =", "{:.0f}".format(runningTime * 1000), "ms")
-    # TODO: print running time of MRApproxOutliers
 
 
 
