@@ -5,36 +5,15 @@ import os
 import math
 from itertools import combinations
 	
-
-
-def SequentialFTT(inputPoints, K):
-    #inputPoints(list)
-    #K: number of clusters
-    #return a set C (list) of K centers
-    #the farthest-first traversal is a sequence of points in the space, where the first point 
-    #is selected arbitrarily and each successive point is as far as possible from the set of previously-selected points.
+# SPARK SETUP
+conf = SparkConf().setAppName('G034HW2')
+sc = SparkContext(conf=conf)
 
 #ho messo la distanza dello scorso hw invece che la euclidian
-    def squaredDistance(p1, p2):
-        t0 = p1[0] - p2[0]
-        t1 = p1[1] - p2[1]                                 
-        return (t0 * t0 + t1 * t1)
-    
-
-    C = [inputPoints[0]]    #inizialize the set of centers with the first point in P
-    while len(C) < K: #while there's still points to "collect"
-        farthest_point = None
-        max_distance = -1
-        for point in inputPoints:
-            #calculate the minimum distance from point to the current set of centers C
-            min_distance = min(squaredDistance(point, center) for center in C)
-            if min_distance > max_distance:
-                max_distance = min_distance
-                farthest_point = point
-        C.append(farthest_point)
-    return C
-
-
+def squaredDistance(p1, p2):
+    t0 = p1[0] - p2[0]
+    t1 = p1[1] - p2[1]                                 
+    return (t0 * t0 + t1 * t1)
 
 def MRApproxOutliers(inputPoints, D, M):
 	# inputPoints: RDD already subdivided into a suitable number of partitions
@@ -80,14 +59,57 @@ def MRApproxOutliers(inputPoints, D, M):
     
     print("Number of sure outliers =", outliers)
     print("Number of uncertain points =", uncertain)
+
+
+def SequentialFTT(inputPoints, K):
+    #inputPoints(list)
+    #K: number of clusters
+    #return a set C (list) of K centers
+    #the farthest-first traversal is a sequence of points in the space, where the first point 
+    #is selected arbitrarily and each successive point is as far as possible from the set of previously-selected points.
+
+    C = [inputPoints[0]]    #inizialize the set of centers with the first point in P
+    while len(C) < K: #while there's still points to "collect"
+        farthest_point = None
+        max_distance = -1
+        for point in inputPoints:
+            #calculate the minimum distance from point to the current set of centers C
+            min_distance = min(squaredDistance(point, center) for center in C)
+            if min_distance > max_distance:
+                max_distance = min_distance
+                farthest_point = point
+        C.append(farthest_point)
+    return C
+
+
+def maxDistance(max_distance, point):
+    # Compute the maximum distance between the point and the accumulated maximum distance
+    return max(max_distance, point)
+
+
+def MRFFT(P, K):
+    # P: input points stored in a RDD partitioned into L partitions
+    # K: number of centers
+
+    # run SequentialFFT for each partition
+    R1_RDD = P.mapPartitions(lambda partition: SequentialFTT(partition, K))
+    
+    # collect results of R1_RDD
+    R1_result = R1_RDD.collect()
+    
+    # apply SequentialFTT on the coreset
+    C = SequentialFTT(R1_result, K)
+    broadcast_C = sc.broadcast(C)
+    
+    # compute the maximum distance from each point to its nearest center
+    #max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in broadcast_C.value])).max()
+    
+    # usando reduce come suggerito da loro
+    max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in broadcast_C.value])).reduce(maxDistance)
     
 
 def main():
     assert len(sys.argv) == 6, "Usage: python G034HW2.py <file_name> <M> <K> <L> "
-
-    # SPARK SETUP
-    conf = SparkConf().setAppName('G034HW2')
-    sc = SparkContext(conf=conf)
 
     # 1. Read input file
     # The file contains the points represented through their coordinates (𝑥𝑝,𝑦𝑝)
@@ -99,7 +121,7 @@ def main():
     assert M.isdigit(), "M must be an integer"
     M = int(M)
 
-    # 3. Read the number of cells to print
+    # 3. Read the number of centers
     K = sys.argv[3]
     assert K.isdigit(), "K must be a integer"
     K = int(K)
@@ -118,6 +140,8 @@ def main():
     print("Number of points =", numPoints)
 
     inputPoints = inputPoints.repartition(L)
+
+    MRFFT(inputPoints, K)
 
 
 
