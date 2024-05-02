@@ -6,6 +6,36 @@ import math
 from itertools import combinations
 	
 
+
+def SequentialFTT(inputPoints, K):
+    #inputPoints(list)
+    #K: number of clusters
+    #return a set C (list) of K centers
+    #the farthest-first traversal is a sequence of points in the space, where the first point 
+    #is selected arbitrarily and each successive point is as far as possible from the set of previously-selected points.
+
+#ho messo la distanza dello scorso hw invece che la euclidian
+    def squaredDistance(p1, p2):
+        t0 = p1[0] - p2[0]
+        t1 = p1[1] - p2[1]                                 
+        return (t0 * t0 + t1 * t1)
+    
+
+    C = [inputPoints[0]]    #inizialize the set of centers with the first point in P
+    while len(C) < K: #while there's still points to "collect"
+        farthest_point = None
+        max_distance = -1
+        for point in inputPoints:
+            #calculate the minimum distance from point to the current set of centers C
+            min_distance = min(squaredDistance(point, center) for center in C)
+            if min_distance > max_distance:
+                max_distance = min_distance
+                farthest_point = point
+        C.append(farthest_point)
+    return C
+
+
+
 def MRApproxOutliers(inputPoints, D, M):
 	# inputPoints: RDD already subdivided into a suitable number of partitions
 	# D: radius of the circle
