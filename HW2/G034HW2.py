@@ -92,7 +92,7 @@ def MRFFT(P, K):
     # K: number of centers
 
     # run SequentialFFT for each partition
-    R1_RDD = P.mapPartitions(lambda partition: SequentialFTT(partition, K))
+    R1_RDD = P.mapPartitions(lambda partition: [SequentialFTT(list(partition), K)])
     
     # collect results of R1_RDD
     R1_result = R1_RDD.collect()
@@ -103,13 +103,15 @@ def MRFFT(P, K):
     
     # compute the maximum distance from each point to its nearest center
     #max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in broadcast_C.value])).max()
-    
+    first_3_lines = P.take(3)
+    for line in first_3_lines:
+        print(line)
     # usando reduce come suggerito da loro
-    max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in broadcast_C.value])).reduce(maxDistance)
+    max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in C])).reduce(maxDistance)
     
 
 def main():
-    assert len(sys.argv) == 6, "Usage: python G034HW2.py <file_name> <M> <K> <L> "
+    assert len(sys.argv) == 5, "Usage: python G034HW2.py <file_name> <M> <K> <L> "
 
     # 1. Read input file
     # The file contains the points represented through their coordinates (𝑥𝑝,𝑦𝑝)
