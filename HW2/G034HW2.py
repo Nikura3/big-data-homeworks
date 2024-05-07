@@ -8,6 +8,7 @@ from itertools import combinations
 # SPARK SETUP
 conf = SparkConf().setAppName('G034HW2')
 sc = SparkContext(conf=conf)
+conf.set("spark.locality.wait", "0s")
 
 #ho messo la distanza dello scorso hw invece che la euclidian
 def squaredDistance(p1, p2):
@@ -81,33 +82,39 @@ def SequentialFTT(inputPoints, K):
         C.append(farthest_point)
     return C
 
-
-def maxDistance(max_distance, point):
-    # Compute the maximum distance between the point and the accumulated maximum distance
-    return max(max_distance, point)
-
-
 def MRFFT(P, K):
     # P: input points stored in a RDD partitioned into L partitions
     # K: number of centers
 
+    # R1
+    startR1Time = time.time()
     # run SequentialFFT for each partition
-    R1_RDD = P.mapPartitions(lambda partition: [SequentialFTT(list(partition), K)])
-    
-    # collect results of R1_RDD
-    R1_result = R1_RDD.collect()
-    
+    R1_RDD = P.mapPartitions(lambda partition: SequentialFTT(list(partition), K)).collect()  # l*k punti
+
+    endR1Time = time.time()
+    runningR1Time = endR1Time - startR1Time
+
+    # R2
+    startR2Time = time.time()
     # apply SequentialFTT on the coreset
-    C = SequentialFTT(R1_result, K)
+    C = SequentialFTT(R1_RDD, K)
+    endR2Time = time.time()
+    runningR2Time = endR2Time - startR2Time
     broadcast_C = sc.broadcast(C)
     
+    # R3
+    startR3Time = time.time()
     # compute the maximum distance from each point to its nearest center
-    #max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in broadcast_C.value])).max()
-    first_3_lines = P.take(3)
-    for line in first_3_lines:
-        print(line)
     # usando reduce come suggerito da loro
-    max_distance = P.map(lambda point: max([squaredDistance(point, center) for center in C])).reduce(maxDistance)
+    radius = P.map(lambda point: min([squaredDistance(point, center) for center in broadcast_C.value])).reduce(max)
+    endR3Time = time.time()
+    runningR3Time = endR3Time - startR3Time
+
+    print('Radius = ', "{:.8f}".format(radius))
+    print("Running time of MRFFT Round 1 =", "{:.0f}".format(runningR1Time * 1000), "ms")
+    print("Running time of MRFFT Round 2 =", "{:.0f}".format(runningR2Time * 1000), "ms")
+    print("Running time of MRFFT Round 3 =", "{:.0f}".format(runningR3Time * 1000), "ms")
+    return radius
     
 
 def main():
@@ -116,7 +123,7 @@ def main():
     # 1. Read input file
     # The file contains the points represented through their coordinates (𝑥𝑝,𝑦𝑝)
     points_path = sys.argv[1]
-    assert os.path.isfile(points_path), "File or folder not found"
+    # assert os.path.isfile(points_path), "File or folder not found"
 
     # 2. Read the threshold to the number of points inside the circle
     M = sys.argv[2]
@@ -143,7 +150,9 @@ def main():
 
     inputPoints = inputPoints.repartition(L)
 
-    MRFFT(inputPoints, K)
+    D = MRFFT(inputPoints, K)
+
+    MRApproxOutliers(inputPoints, D, M)
 
 
 
