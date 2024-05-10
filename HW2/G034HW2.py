@@ -67,26 +67,23 @@ def MRApproxOutliers(inputPoints, D, M):
 
 
 def SequentialFFT(inputPoints, K):
-    #inputPoints(list)
-    #K: number of clusters
-    #return a set C (list) of K centers
-    #the farthest-first traversal is a sequence of points in the space, where the first point 
-    #is selected arbitrarily and each successive point is as far as possible from the set of previously-selected points.
+    # inputPoints : list of points
+    # K: number of clusters
+    # return a list C of K centers
 
     C = [inputPoints[0]]  # Initialize the set of centers with the first point in inputPoints
     
-    # Dictionary to store the minimum distance of each point to the current set of centers
+    # store the minimum distance of each point to the center 
     min_distances = {point: squaredDistance(point, C[0]) for point in inputPoints}
 
     while len(C) < K: # while there's still points to "collect"
         farthest_point = None
-        max_distance = -1  # Initialize max_distance to -1
+        max_distance = -1
         
         for point in inputPoints:
             if point in C:
-                continue  # Skip points already in C
+                continue  # skip points already in C
             
-            # Use the precomputed minimum distance for each point
             radius = min_distances[point]
             
             if radius > max_distance:
@@ -95,24 +92,12 @@ def SequentialFFT(inputPoints, K):
         
         C.append(farthest_point)
         
-        # Update the minimum distance for each point to the new center
+        # update the minimum distance of each point to the new center
         for point in inputPoints:
             if point not in C:
                 min_distances[point] = min(min_distances[point], squaredDistance(point, farthest_point))
         
     return C
-
-    # while len(C) < K: #while there's still points to "collect"
-    #     farthest_point = None
-    #     max_distance = -1
-    #     for point in inputPoints:
-    #         #calculate the minimum distance from point to the current set of centers C
-    #         radius = math.sqrt(min(squaredDistance(point, center) for center in C))
-    #         if radius > max_distance:
-    #             max_distance = radius
-    #             farthest_point = point
-    #     C.append(farthest_point)
-    # return C
 
 def MRFFT(P, K):
     # P: input points stored in a RDD partitioned into L partitions
@@ -121,15 +106,17 @@ def MRFFT(P, K):
     # R1
     startR1Time = time.time()
     # run SequentialFFT for each partition
-    R1_RDD = P.mapPartitions(lambda partition: SequentialFFT(list(partition), K)).collect()  # l*k punti
-
+    R1_RDD = P.mapPartitions(lambda partition: SequentialFFT(list(partition), K))  # L * K points
+    R1_RDD.cache()
+    R1_RDD.count()
     endR1Time = time.time()
     runningR1Time = endR1Time - startR1Time
 
     # R2
     startR2Time = time.time()
+    R1_RDD_collected = R1_RDD.collect()
     # apply SequentialFTT on the coreset
-    C = SequentialFFT(R1_RDD, K)
+    C = SequentialFFT(R1_RDD_collected, K) # K points
     endR2Time = time.time()
     runningR2Time = endR2Time - startR2Time
     broadcast_C = sc.broadcast(C)
@@ -137,13 +124,11 @@ def MRFFT(P, K):
     # R3
     startR3Time = time.time()
     # compute the maximum distance from each point to its nearest center
-    # usando reduce come suggerito da loro
     radius = P.map(lambda point: math.sqrt(min(squaredDistance(point, center) for center in broadcast_C.value))).reduce(max)
 
     endR3Time = time.time()
     runningR3Time = endR3Time - startR3Time
 
-    print('Radius = ', "{:.8f}".format(radius))
     print("Running time of MRFFT Round 1 =", "{:.0f}".format(runningR1Time * 1000), "ms")
     print("Running time of MRFFT Round 2 =", "{:.0f}".format(runningR2Time * 1000), "ms")
     print("Running time of MRFFT Round 3 =", "{:.0f}".format(runningR3Time * 1000), "ms")
@@ -184,9 +169,14 @@ def main():
     inputPoints = inputPoints.repartition(L)
 
     D = MRFFT(inputPoints, K)
+    print("Radius =", "{:.8f}".format(D))
 
+    startMRApproxTime = time.time()
     MRApproxOutliers(inputPoints, D, M)
+    endMRApproxTime = time.time()
+    runningMRApproxTime = endMRApproxTime - startMRApproxTime
 
+    print("Running time of MRApproxOutliers =", "{:.0f}".format(runningMRApproxTime * 1000), "ms")
 
 
 if __name__ == "__main__":
