@@ -10,15 +10,10 @@ conf = SparkConf().setAppName('G034HW2')
 sc = SparkContext(conf=conf)
 conf.set("spark.locality.wait", "0s")
 
-#ho messo la distanza dello scorso hw invece che la euclidian
 def squaredDistance(p1, p2):
     t0 = p1[0] - p2[0]
     t1 = p1[1] - p2[1]                                 
     return (t0 * t0 + t1 * t1)
-
-# def euclideanDistance(p1, p2):
-#     squared_diff_sum = sum((x - y) ** 2 for x, y in zip(p1, p2))
-#     return math.sqrt(squared_diff_sum)
 
 def MRApproxOutliers(inputPoints, D, M):
 	# inputPoints: RDD already subdivided into a suitable number of partitions
@@ -71,19 +66,23 @@ def SequentialFFT(inputPoints, K):
     # K: number of clusters
     # return a list C of K centers
 
-    C = [inputPoints[0]]  # Initialize the set of centers with the first point in inputPoints
+    # Initialize the set of centers with the first point in inputPoints
+    C = [inputPoints[0]] 
     
-    # store the minimum distance of each point to the center 
-    min_distances = {point: squaredDistance(point, C[0]) for point in inputPoints}
+    # Use a set to store the points that are already in C
+    C_set = {inputPoints[0]}
+    
+    # Use a set to store the points that are not in C
+    input_set = set(inputPoints[1:])
+    
+    # Use a set to store the minimum distance of each point to the center
+    min_distances = {point: squaredDistance(point, C[0]) for point in input_set}
 
-    while len(C) < K: # while there's still points to "collect"
+    while len(C) < K: # while there's still points to collect
         farthest_point = None
         max_distance = -1
         
-        for point in inputPoints:
-            if point in C:
-                continue  # skip points already in C
-            
+        for point in input_set:
             radius = min_distances[point]
             
             if radius > max_distance:
@@ -91,11 +90,14 @@ def SequentialFFT(inputPoints, K):
                 farthest_point = point
         
         C.append(farthest_point)
+        C_set.add(farthest_point)
+        input_set.remove(farthest_point)
         
-        # update the minimum distance of each point to the new center
-        for point in inputPoints:
-            if point not in C:
-                min_distances[point] = min(min_distances[point], squaredDistance(point, farthest_point))
+        # Update the minimum distance of each point to the new center
+        for point in input_set:
+            distance = squaredDistance(point, farthest_point)
+            if distance < min_distances.get(point, float('inf')):
+                min_distances[point] = distance
         
     return C
 
@@ -112,6 +114,8 @@ def MRFFT(P, K):
     endR1Time = time.time()
     runningR1Time = endR1Time - startR1Time
 
+    print("Running time of MRFFT Round 1 =", "{:.0f}".format(runningR1Time * 1000), "ms")
+    
     # R2
     startR2Time = time.time()
     R1_RDD_collected = R1_RDD.collect()
@@ -119,6 +123,9 @@ def MRFFT(P, K):
     C = SequentialFFT(R1_RDD_collected, K) # K points
     endR2Time = time.time()
     runningR2Time = endR2Time - startR2Time
+
+    print("Running time of MRFFT Round 2 =", "{:.0f}".format(runningR2Time * 1000), "ms")
+    
     broadcast_C = sc.broadcast(C)
     
     # R3
@@ -129,8 +136,6 @@ def MRFFT(P, K):
     endR3Time = time.time()
     runningR3Time = endR3Time - startR3Time
 
-    print("Running time of MRFFT Round 1 =", "{:.0f}".format(runningR1Time * 1000), "ms")
-    print("Running time of MRFFT Round 2 =", "{:.0f}".format(runningR2Time * 1000), "ms")
     print("Running time of MRFFT Round 3 =", "{:.0f}".format(runningR3Time * 1000), "ms")
     return radius
     
