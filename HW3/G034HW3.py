@@ -47,6 +47,34 @@ def reservoirSampling(stream, sample, m, global_count):
             if s < m:
                 sample[s] = item
 
+def stickySampling(stream, hash_table_size, phi, delta):
+  # Initialize hash table
+  hash_table = defaultdict(lambda: 0)
+
+  for item in stream.collect():
+    # Hash the item
+    h = hash(item) % hash_table_size
+
+    # Check if item is already in the hash table
+    if hash_table[h] == item:
+      continue
+
+    # Flip a coin with probability 1 - phi
+    x = random.random()
+    if x > 1 - phi:
+      # Sticky sampling: replace the current item with probability delta
+      if random.random() < delta:
+        hash_table[h] = item
+
+  # Extract frequent items from hash table
+  frequent_items = [item for item, count in hash_table.items() if count > 0]
+
+  # Sort frequent items
+  frequent_items.sort()
+
+  return frequent_items
+
+
 if __name__ == '__main__':
     assert len(sys.argv) == 6, "USAGE: n, phi, epsilon, delta, portExp"
 
@@ -104,3 +132,5 @@ if __name__ == '__main__':
         print("Largest item =", largest_item)
     print("Reservoir sample size =", len(sample))
     print("Sample items =", sample)
+
+
