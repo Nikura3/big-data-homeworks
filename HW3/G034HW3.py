@@ -7,130 +7,104 @@ import sys
 import random
 import math
 
-def exactFrequentItems(stream, k, candidates, global_count, stopping_condition, n):
-    # Convert RDD to a list of items
+def exactCount(stream, candidates, global_count, stopping_condition, n):
     items = stream.collect()
 
-    # Keep a counter for each item
-    local_candidates = defaultdict(int)
-
     for item in items:
-        if item in local_candidates:
-            local_candidates[item] += 1
-        elif len(local_candidates) < k:
-            local_candidates[item] = 1
-        else:
-            for key in list(local_candidates.keys()):
-                local_candidates[key] -= 1
-                if local_candidates[key] == 0:
-                    del local_candidates[key]
+        candidates[item] += 1
+        global_count[0] += 1
 
-    # Update global candidates and global count
-    for item, count in local_candidates.items():
-        candidates[item] += count
-        global_count[0] += count
-
-    # Check if the total number of processed items meets or exceeds n
     if global_count[0] >= n:
         stopping_condition.set()
 
-def reservoirSampling(stream, sample, m, global_count):
-    # Convert RDD to a list of items
+
+def reservoirSampling(stream, reservoir, m, t):
     items = stream.collect()
-
     for item in items:
-        global_count[0] += 1
-        if len(sample) < m:
-            sample.append(item)
+        t[0] += 1
+        if len(reservoir) < m:
+            reservoir.append(item)
         else:
-            s = random.randint(0, global_count[0] - 1)
+            s = random.randint(0, t[0] - 1)
             if s < m:
-                sample[s] = item
+                reservoir[s] = item
 
-def stickySampling(stream, hash_table_size, phi, delta):
-  # Initialize hash table
-  hash_table = defaultdict(lambda: 0)
-
-  for item in stream.collect():
-    # Hash the item
-    h = hash(item) % hash_table_size
-
-    # Check if item is already in the hash table
-    if hash_table[h] == item:
-      continue
-
-    # Flip a coin with probability 1 - phi
-    x = random.random()
-    if x > 1 - phi:
-      # Sticky sampling: replace the current item with probability delta
-      if random.random() < delta:
-        hash_table[h] = item
-
-  # Extract frequent items from hash table
-  frequent_items = [item for item, count in hash_table.items() if count > 0]
-
-  # Sort frequent items
-  frequent_items.sort()
-
-  return frequent_items
-
+def stickySampling(stream, hash_table, hash_table_size, phi, delta):
+    for item in stream.collect():
+        h = hash(item) % hash_table_size
+        if hash_table[h] == item:
+            continue
+        x = random.random()
+        if x <= phi:
+            if random.random() < delta:
+                hash_table[h] = item
 
 if __name__ == '__main__':
     assert len(sys.argv) == 6, "USAGE: n, phi, epsilon, delta, portExp"
 
-    # Spark Configuration
     conf = SparkConf().setMaster("local[*]").setAppName("G034HW3")
     sc = SparkContext(conf=conf)
-    ssc = StreamingContext(sc, 0.01)  # Batch duration of 0.01 seconds
+    ssc = StreamingContext(sc, 0.01)
     ssc.sparkContext.setLogLevel("ERROR")
-    
+
     stopping_condition = threading.Event()
+    lock = threading.Lock()
 
-    # Input Parameters
     n = int(sys.argv[1])
-    print("Number of items of the stream to be processed =", n)
-
     phi = float(sys.argv[2])
-    print("The frequency threshold in (0,1) =", phi)
-
     epsilon = float(sys.argv[3])
-    print("The accuracy parameter in (0,1) =", epsilon)
-
     delta = float(sys.argv[4])
-    print("The confidence parameter in (0,1) =", delta)
-
     portExp = int(sys.argv[5])
-    print("Receiving data from port =", portExp)
 
-    # Data Structures
+    print("INPUT PROPERTIES")
+    print(f"n = {n} phi = {phi} epsilon = {epsilon} delta = {delta} port = {portExp}")
+
     candidates = defaultdict(int)
-    global_count = [0]  # Use a list to allow modification within exactFrequentItems
-    k = int(1 / phi)
+    global_count = [0]
+    t = [0]
     m = math.ceil(1 / phi)
-    sample = []
+    reservoir = []
+    hash_table_size = 10000
+    hash_table = defaultdict(lambda: 0)
 
-    # Stream Processing
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
 
-    stream.foreachRDD(lambda time, rdd: exactFrequentItems(rdd, k, candidates, global_count, stopping_condition, n))
-    stream.foreachRDD(lambda time, rdd: reservoirSampling(rdd, sample, m, global_count))
-    
-    # Managing Streaming Context
-    print("Starting streaming engine")
+    stream.foreachRDD(lambda time, rdd: exactCount(rdd, candidates, global_count, stopping_condition, n))
+    stream.foreachRDD(lambda time, rdd: reservoirSampling(rdd, reservoir, m, t))
+    # stream.foreachRDD(lambda time, rdd: stickySampling(rdd, hash_table, hash_table_size, phi, delta))
+
     ssc.start()
-    print("Waiting for shutdown condition")
     stopping_condition.wait()
-    print("Stopping the streaming engine")
     ssc.stop(False, True)
-    print("Streaming engine stopped")
 
-    # Compute and Print Final Statistics
-    print("Number of items processed =", global_count[0])
-    print("Number of distinct items =", len(candidates))
-    if candidates:
-        largest_item = max(candidates.keys(), key=(lambda key: candidates[key]))
-        print("Largest item =", largest_item)
-    print("Reservoir sample size =", len(sample))
-    print("Sample items =", sample)
+    true_frequent_items = {item for item, count in candidates.items() if count >= phi * n}
+    estimated_frequent_items_reservoir = {item for item in reservoir}
+    # estimated_frequent_items_sticky = {item for item in hash_table.values() if item != 0}
+
+    # Output for EXACT ALGORITHM
+    print("EXACT ALGORITHM")
+    print(f"Number of items in the data structure = {len(candidates)}")
+    print(f"Number of true frequent items = {len(true_frequent_items)}")
+    print("True frequent items:")
+    # Sort the numbers in increasing order
+    for item in sorted(true_frequent_items, key=lambda x: int(x)):
+        print(item)
 
 
+    # Output for RESERVOIR SAMPLING
+    print("RESERVOIR SAMPLING")
+    print(f"Size m of the sample = {m}")
+    print(f"Number of estimated frequent items = {len(estimated_frequent_items_reservoir)}")
+    print("Estimated frequent items:")
+    for item in sorted(estimated_frequent_items_reservoir, key=lambda x: int(x)):
+        sign = "+" if item in true_frequent_items else "-"
+        print(f"{item} {sign}")
+
+    # Output for STICKY SAMPLING
+    # print("STICKY SAMPLING")
+    # print(f"Number of items in the Hash Table = {len(hash_table)}")
+    # print(f"Number of estimated frequent items = {len(estimated_frequent_items_sticky)}")
+    # print("Estimated frequent items:")
+    # for item in sorted(estimated_frequent_items_sticky):
+    #     sign = "+" if item in true_frequent_items else "-"
+    #     print(f"{item} {sign}")
