@@ -16,7 +16,7 @@ def exactCount(rdd, candidates, global_count, stopping_condition, n):
             stopping_condition.set()
             return
 
-def reservoirSampling(rdd, reservoir, m, t):
+def reservoirSampling(rdd, reservoir, m, t, n):
     items = rdd.collect()
     for item in items:
         t[0] += 1
@@ -26,8 +26,10 @@ def reservoirSampling(rdd, reservoir, m, t):
             s = random.randint(0, t[0] - 1)
             if s < m:
                 reservoir[s] = item
+        if t[0] >= n:
+            return
 
-def stickySampling(rdd, hash_table, hash_table_size, phi, epsilon, delta, item_count, n):
+def stickySampling(rdd, hash_table, hash_table_size, item_count, n):
     items = rdd.collect()
     for item in items:
         item_count[0] += 1
@@ -71,8 +73,8 @@ if __name__ == '__main__':
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
 
     stream.foreachRDD(lambda time, rdd: exactCount(rdd, candidates, global_count, stopping_condition, n))
-    stream.foreachRDD(lambda time, rdd: reservoirSampling(rdd, reservoir, m, t))
-    stream.foreachRDD(lambda time, rdd: stickySampling(rdd, hash_table, hash_table_size, phi, epsilon, delta, item_count, n))
+    stream.foreachRDD(lambda time, rdd: reservoirSampling(rdd, reservoir, m, t, n))
+    stream.foreachRDD(lambda time, rdd: stickySampling(rdd, hash_table, hash_table_size, item_count, n))
     
     def stop_streaming(ssc, stopping_condition):
         stopping_condition.wait()
